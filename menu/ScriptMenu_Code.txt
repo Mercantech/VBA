@@ -1,0 +1,28 @@
+' Script-menu UserForm – form kode (fremtidskontekst).
+' Knapper på formen: (Name) = CEDCE, (Name) = RemoveDuplicateFromLectio.
+
+Option Explicit
+
+Private Sub CEDCE_Click()
+    Me.Hide
+    On Error Resume Next
+    Call ExportCEDCEYearReportToExcel
+    If Err.Number <> 0 Then MsgBox "Fejl ved kørsel: " & Err.Description, vbExclamation
+    Unload Me
+End Sub
+
+Private Sub RemoveDuplicateFromLectio_Click()
+    Me.Hide
+    On Error Resume Next
+    Call DeleteCalendarItemsByTitle
+    If Err.Number <> 0 Then MsgBox "Fejl ved kørsel: " & Err.Description, vbExclamation
+    Unload Me
+End Sub
+
+Private Sub UserForm_Initialize()
+    Me.Caption = "Script-menu"
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    If CloseMode = 0 Then Cancel = 0
+End Sub
