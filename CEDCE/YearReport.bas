@@ -66,6 +66,7 @@ Sub ExportCEDCEYearReportToExcel()
     wsMeet.Cells(1, 5).Value = "ISO Week"
     wsMeet.Cells(1, 6).Value = "ISO Year"
     wsMeet.Cells(1, 7).Value = "Categories"
+    wsMeet.Cells(1, 8).Value = "Description"
     wsMeet.Rows(1).Font.Bold = True
 
     Dim rowMeet As Long: rowMeet = 2
@@ -89,6 +90,9 @@ Sub ExportCEDCEYearReportToExcel()
     Dim weekHours As Object: Set weekHours = CreateObject("Scripting.Dictionary")
     Dim weekCount As Object: Set weekCount = CreateObject("Scripting.Dictionary")
 
+    Dim weekdayHours(1 To 7) As Double
+    Dim weekdayCount(1 To 7) As Long
+
     Dim totalHours As Double: totalHours = 0
     Dim totalMeetings As Long: totalMeetings = 0
     Dim maxMeetingHours As Double: maxMeetingHours = 0
@@ -96,7 +100,7 @@ Sub ExportCEDCEYearReportToExcel()
     ' ===========================
     ' Loop calendar
     ' ===========================
-    Dim apptDate As Date, apptDay As Integer, apptMonth As Integer
+    Dim apptDate As Date, apptDay As Integer, apptMonth As Integer, apptWeekday As Integer
     Dim durationHours As Double, dayCol As Long
     Dim uniqKey As String
     Dim isoW As Integer, isoY As Integer
@@ -149,6 +153,10 @@ Sub ExportCEDCEYearReportToExcel()
                         weekHours(wKey) = weekHours(wKey) + durationHours
                         weekCount(wKey) = weekCount(wKey) + 1
 
+                        apptWeekday = Weekday(appt.Start, vbMonday)
+                        weekdayHours(apptWeekday) = weekdayHours(apptWeekday) + durationHours
+                        weekdayCount(apptWeekday) = weekdayCount(apptWeekday) + 1
+
                         ' Raw meetings log
                         wsMeet.Cells(rowMeet, 1).Value = appt.Subject
                         wsMeet.Cells(rowMeet, 2).Value = appt.Start
@@ -157,6 +165,7 @@ Sub ExportCEDCEYearReportToExcel()
                         wsMeet.Cells(rowMeet, 5).Value = isoW
                         wsMeet.Cells(rowMeet, 6).Value = isoY
                         wsMeet.Cells(rowMeet, 7).Value = appt.Categories
+                        wsMeet.Cells(rowMeet, 8).Value = GetMeetingBodyPreview(appt.Body, 1000)
                         rowMeet = rowMeet + 1
 
                         ' Month sheet row (matrix)
@@ -184,6 +193,8 @@ Sub ExportCEDCEYearReportToExcel()
     ' Meetings formatting
     wsMeet.Columns("B:C").NumberFormat = "yyyy-mm-dd hh:mm"
     wsMeet.Columns("D:D").NumberFormat = "0.00"
+    wsMeet.Columns("H:H").ColumnWidth = 50
+    wsMeet.Columns("H:H").WrapText = True
     wsMeet.Columns.AutoFit
 
     ' ===========================
@@ -191,7 +202,8 @@ Sub ExportCEDCEYearReportToExcel()
     ' ===========================
     BuildReportSheet wsReport, reportYear, subjectNeedle, categoryNeedle, _
                      totalHours, totalMeetings, maxMeetingHours, _
-                     monthHours, monthCount, weekHours, weekCount
+                     monthHours, monthCount, weekHours, weekCount, _
+                     weekdayHours, weekdayCount
 
     ' ===========================
     ' Save & cleanup
@@ -227,7 +239,8 @@ Private Sub BuildReportSheet(ByVal ws As Object, ByVal reportYear As Integer, _
                              ByVal subjectNeedle As String, ByVal categoryNeedle As String, _
                              ByVal totalHours As Double, ByVal totalMeetings As Long, ByVal maxMeetingHours As Double, _
                              ByRef monthHours() As Double, ByRef monthCount() As Long, _
-                             ByVal weekHours As Object, ByVal weekCount As Object)
+                             ByVal weekHours As Object, ByVal weekCount As Object, _
+                             ByRef weekdayHours() As Double, ByRef weekdayCount() As Long)
 
     ws.Cells.Clear
 
@@ -240,6 +253,7 @@ Private Sub BuildReportSheet(ByVal ws As Object, ByVal reportYear As Integer, _
     ' Criteria
     ws.Cells(3, 1).Value = "Included if:"
     ws.Cells(3, 2).Value = "Subject contains """ & subjectNeedle & """ OR Category = """ & categoryNeedle & """"
+    ws.Range("A3:B3").Borders.LineStyle = 1
 
     ' KPI block
     Dim activeMonths As Long, activeWeeks As Long
@@ -283,6 +297,7 @@ Private Sub BuildReportSheet(ByVal ws As Object, ByVal reportYear As Integer, _
     ws.Cells(12, 2).Value = avgHoursActiveWeeks
 
     ws.Range("B6:B12").NumberFormat = "0.00"
+    ws.Range("A5:B12").Borders.LineStyle = 1
     ws.Columns("A:B").AutoFit
 
     ' Monthly table
@@ -303,6 +318,7 @@ Private Sub BuildReportSheet(ByVal ws As Object, ByVal reportYear As Integer, _
         r = r + 1
     Next m
     ws.Range("B16:B27").NumberFormat = "0.00"
+    ws.Range("A14:C27").Borders.LineStyle = 1
     ws.Columns("A:C").AutoFit
 
     ' Weekly table (top 25 by hours)
@@ -329,7 +345,106 @@ Private Sub BuildReportSheet(ByVal ws As Object, ByVal reportYear As Integer, _
         Next i
 
         ws.Range("F16:F" & (15 + limit)).NumberFormat = "0.00"
+        ws.Range("E14:G" & (15 + limit)).Borders.LineStyle = 1
         ws.Columns("E:G").AutoFit
+    End If
+
+    ' Weekday table (Mon-Sun)
+    ws.Cells(14, 9).Value = "Hours per weekday"
+    ws.Cells(14, 9).Font.Bold = True
+    ws.Cells(15, 9).Value = "Weekday"
+    ws.Cells(15, 10).Value = "Hours"
+    ws.Cells(15, 11).Value = "Meetings"
+    ws.Range("I15:K15").Font.Bold = True
+    For i = 1 To 7
+        ws.Cells(15 + i, 9).Value = WeekdayName(i, True, vbMonday)
+        ws.Cells(15 + i, 10).Value = weekdayHours(i)
+        ws.Cells(15 + i, 11).Value = weekdayCount(i)
+    Next i
+    ws.Range("J16:J22").NumberFormat = "0.00"
+    ws.Range("I14:K22").Borders.LineStyle = 1
+    ws.Columns("I:K").AutoFit
+
+    ' All weeks (chronological) - overview
+    Dim keysChron As Variant, nWeeks As Long
+    If weekHours.Count > 0 Then
+        keysChron = weekHours.Keys
+        SortKeysByWeekChronological keysChron
+        nWeeks = UBound(keysChron) - LBound(keysChron) + 1
+
+        ws.Cells(14, 13).Value = "All weeks (chronological)"
+        ws.Cells(14, 13).Font.Bold = True
+        ws.Cells(15, 13).Value = "Week"
+        ws.Cells(15, 14).Value = "Hours"
+        ws.Cells(15, 15).Value = "Meetings"
+        ws.Range("M15:O15").Font.Bold = True
+        For i = 0 To nWeeks - 1
+            ws.Cells(16 + i, 13).Value = keysChron(i)
+            ws.Cells(16 + i, 14).Value = weekHours(keysChron(i))
+            ws.Cells(16 + i, 15).Value = weekCount(keysChron(i))
+        Next i
+        ws.Range("N16:N" & (15 + nWeeks)).NumberFormat = "0.00"
+        ws.Range("M14:O" & (15 + nWeeks)).Borders.LineStyle = 1
+        ws.Columns("M:O").AutoFit
+    Else
+        nWeeks = 0
+    End If
+
+    ' ----- Charts -----
+    Dim ch As Object
+    Const xlColumnClustered As Long = 51
+    Const xlLineMarkers As Long = 65
+
+    ' Chart 1: Hours per month (below monthly table)
+    Set ch = ws.ChartObjects.Add(10, 420, 320, 200)
+    ch.Chart.ChartType = xlColumnClustered
+    ch.Chart.SetSourceData Source:=ws.Range("A16:B27")
+    ch.Chart.HasTitle = True
+    ch.Chart.ChartTitle.Text = "Hours per month"
+    ch.Chart.Axes(1).TickLabels.Font.Size = 9
+    ch.Chart.Axes(2).TickLabels.NumberFormat = "0.0"
+
+    ' Chart 2: Hours per weekday (next to weekday table)
+    Set ch = ws.ChartObjects.Add(340, 420, 260, 200)
+    ch.Chart.ChartType = xlColumnClustered
+    ch.Chart.SetSourceData Source:=ws.Range("I16:J22")
+    ch.Chart.HasTitle = True
+    ch.Chart.ChartTitle.Text = "Hours per weekday"
+    ch.Chart.Axes(1).TickLabels.Font.Size = 9
+    ch.Chart.Axes(2).TickLabels.NumberFormat = "0.0"
+
+    ' Chart 3: Top 10 weeks (below left chart)
+    If weekHours.Count > 0 Then
+        Dim topWeeks As Long
+        topWeeks = 10
+        If limit < topWeeks Then topWeeks = limit
+        Set ch = ws.ChartObjects.Add(10, 640, 400, 200)
+        ch.Chart.ChartType = xlColumnClustered
+        ch.Chart.SetSourceData Source:=ws.Range("E16:F" & (15 + topWeeks))
+        ch.Chart.HasTitle = True
+        ch.Chart.ChartTitle.Text = "Top " & topWeeks & " weeks (hours)"
+        ch.Chart.Axes(1).TickLabels.Font.Size = 8
+        ch.Chart.Axes(2).TickLabels.NumberFormat = "0.0"
+    End If
+
+    ' Chart 4: Weekly development (line chart - all weeks in chronological order)
+    If nWeeks > 0 Then
+        Dim tickSpacing As Long
+        tickSpacing = 1
+        If nWeeks > 15 Then tickSpacing = Int(nWeeks / 12)
+        If tickSpacing < 1 Then tickSpacing = 1
+
+        Set ch = ws.ChartObjects.Add(420, 640, 480, 240)
+        ch.Chart.ChartType = xlLineMarkers
+        ch.Chart.SetSourceData Source:=ws.Range("M16:N" & (15 + nWeeks))
+        ch.Chart.HasTitle = True
+        ch.Chart.ChartTitle.Text = "Hours per week (development)"
+        ch.Chart.Axes(1).TickLabels.Font.Size = 8
+        ch.Chart.Axes(1).TickLabelSpacing = tickSpacing
+        ch.Chart.Axes(2).TickLabels.NumberFormat = "0.0"
+        ch.Chart.Axes(2).MinimumScale = 0
+        ch.Chart.SeriesCollection(1).MarkerStyle = 8
+        ch.Chart.SeriesCollection(1).MarkerSize = 4
     End If
 
 End Sub
@@ -356,6 +471,38 @@ Private Sub SortKeysByWeekHoursDesc(ByRef keys As Variant, ByVal weekHours As Ob
             End If
         Next j
     Next i
+End Sub
+
+Private Sub SortKeysByWeekChronological(ByRef keys As Variant)
+    ' in-place sort: 2025-W52 < 2026-W01 < 2026-W02 ...
+    Dim i As Long, j As Long
+    Dim tmp As Variant
+    Dim y1 As Long, w1 As Integer, y2 As Long, w2 As Integer
+    For i = LBound(keys) To UBound(keys) - 1
+        For j = i + 1 To UBound(keys)
+            ParseWeekKey CStr(keys(j)), y2, w2
+            ParseWeekKey CStr(keys(i)), y1, w1
+            If (y2 < y1) Or (y2 = y1 And w2 < w1) Then
+                tmp = keys(i)
+                keys(i) = keys(j)
+                keys(j) = tmp
+                y1 = y2
+                w1 = w2
+            End If
+        Next j
+    Next i
+End Sub
+
+Private Sub ParseWeekKey(ByVal wKey As String, ByRef isoYear As Long, ByRef isoWeek As Integer)
+    ' "2026-W03" -> isoYear=2026, isoWeek=3
+    Dim p As Long
+    isoYear = 0
+    isoWeek = 0
+    p = InStr(1, wKey, "-W", vbTextCompare)
+    If p > 1 Then
+        isoYear = CLng(Left$(wKey, p - 1))
+        isoWeek = CInt(Mid$(wKey, p + 2, 2))
+    End If
 End Sub
 
 ' ---------- Month sheet helpers ----------
@@ -438,4 +585,24 @@ Private Function CategoriesContain(ByVal categoriesText As String, ByVal categor
             Exit Function
         End If
     Next i
+End Function
+
+' ---------- Body preview for Meetings sheet ----------
+
+Private Function GetMeetingBodyPreview(ByVal body As String, ByVal maxLen As Long) As String
+    Dim s As String
+    If Len(body) = 0 Then
+        GetMeetingBodyPreview = ""
+        Exit Function
+    End If
+    s = Replace(body, vbCrLf, " ")
+    s = Replace(s, vbCr, " ")
+    s = Replace(s, vbLf, " ")
+    s = Replace(s, vbTab, " ")
+    Do While InStr(s, "  ") > 0
+        s = Replace(s, "  ", " ")
+    Loop
+    s = Trim$(s)
+    If Len(s) > maxLen Then s = Left$(s, maxLen) & "..."
+    GetMeetingBodyPreview = s
 End Function
